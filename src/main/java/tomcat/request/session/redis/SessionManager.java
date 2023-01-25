@@ -99,6 +99,10 @@ public class SessionManager extends ManagerBase implements Lifecycle {
     /** {@inheritDoc} */
     @Override
     public Session createSession(String sessionId) {
+    	
+    	LOGGER.debug("SessionManager.createSession for id: "+sessionId);
+    	
+    	
         if (sessionId != null) {
             sessionId = (this.dataCache.setnx(sessionId, SessionConstants.NULL_SESSION) == 0L) ? null : sessionId;
         } else {
@@ -145,7 +149,10 @@ public class SessionManager extends ManagerBase implements Lifecycle {
     /** {@inheritDoc} */
     @Override
     public Session findSession(String sessionId) throws IOException {
+    	LOGGER.debug("SessionManager.findSession with sessionId: "+sessionId);
+    	
         if (sessionId != null && this.sessionContext.get() != null && sessionId.equals(this.sessionContext.get().getId())) {
+        	LOGGER.debug("SessionManager.findSession return session from sessionContext");
             return this.sessionContext.get().getSession();
         }
 
@@ -154,14 +161,23 @@ public class SessionManager extends ManagerBase implements Lifecycle {
         SessionMetadata metadata = null;
 
         byte[] data = this.dataCache.get(sessionId);
+        
+        LOGGER.debug("SessionManager.findSession from dataCache");
+        
         if (data == null) {
             sessionId = null;
             isPersisted = false;
+            
+            LOGGER.debug("SessionManager.findSession from dataCache NOT PERSISTED");
+            
         } else {
             if (Arrays.equals(SessionConstants.NULL_SESSION, data)) {
                 throw new IOException("NULL session data");
             }
             try {
+            	
+            	LOGGER.debug("SessionManager.findSession from dataCache DESERIALIZE");
+            	
                 metadata = new SessionMetadata();
                 Session newSession = createEmptySession();
                 this.serializer.deserializeSessionData(data, newSession, metadata);
@@ -179,7 +195,10 @@ public class SessionManager extends ManagerBase implements Lifecycle {
                 LOGGER.error("Error occurred while de-serializing the session object..", ex);
             }
         }
+        
+        LOGGER.debug("SessionManager.findSession before setValues");
         setValues(sessionId, session, isPersisted, metadata);
+        LOGGER.debug("SessionManager.findSession after setValues returning session");
         return session;
     }
 
@@ -228,6 +247,10 @@ public class SessionManager extends ManagerBase implements Lifecycle {
 
     /** To save session object to data cache. */
     public void save(org.apache.catalina.Session session, boolean forceSave) {
+    	
+    	LOGGER.debug("SessionManager.save: "+session.getId()+" forceSave: "+forceSave);
+    	
+    	
         try {
             Boolean isPersisted;
             Session newSession = (Session) session;
@@ -240,6 +263,8 @@ public class SessionManager extends ManagerBase implements Lifecycle {
                     || (isPersisted = (this.sessionContext.get() != null) ? this.sessionContext.get().isPersisted() : null) == null
                     || !isPersisted || !Arrays.equals(hash, currentHash)) {
 
+            	LOGGER.debug("SessionManager.save serialize");
+            	
                 SessionMetadata metadata = new SessionMetadata();
                 metadata.setAttributesHash(currentHash);
 
@@ -251,6 +276,7 @@ public class SessionManager extends ManagerBase implements Lifecycle {
             int timeout = getSessionTimeout(newSession);
             this.dataCache.expire(newSession.getId(), timeout);
             LOGGER.debug("Session [" + newSession.getId() + "] expire in [" + timeout + "] seconds.");
+            LOGGER.debug("SessionManager.save finished");
 
         } catch (IOException ex) {
             LOGGER.error("Error occurred while saving the session object in data cache..", ex);
